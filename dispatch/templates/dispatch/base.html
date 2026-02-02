@@ -1,0 +1,45 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RescueAI - Roadside Assistance</title>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800&display=swap" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{% static 'dispatch/style.css' %}">
+</head>
+<body>
+    <div class="container">
+        <nav class="navbar">
+            <a href="/" class="logo">RescueAI 🚑</a>
+            <div class="nav-links">
+                {% if user.is_authenticated %}
+                    <span>Hello, {{ user.username }}</span>
+                    {% if user.mechanic_profile %}
+                        <a href="{% url 'mechanic_dashboard' %}">Dashboard</a>
+                    {% else %}
+                        <a href="{% url 'user_home' %}">Home</a>
+                    {% endif %}
+                    <form action="{% url 'logout' %}" method="post" style="display:inline;">
+                        {% csrf_token %}
+                        <button type="submit" class="btn" style="background:none; color:rgba(255,255,255,0.7); padding:0; margin-left:20px;">Logout</button>
+                    </form>
+                {% else %}
+                    <a href="{% url 'login' %}">Login</a>
+                    <a href="{% url 'register_user' %}">User Sign Up</a>
+                    <a href="{% url 'register_mechanic' %}">Mechanic Sign Up</a>
+                {% endif %}
+            </div>
+        </nav>
+
+        {% block content %}
+        {% endblock %}
+    </div>
+
+    <script>
+        // Global scripts if needed
+    </script>
+</body>
+</html>

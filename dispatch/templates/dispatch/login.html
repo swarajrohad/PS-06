@@ -1,0 +1,22 @@
+{% extends 'dispatch/base.html' %}
+
+{% block content %}
+<div class="card" style="max-width: 400px; margin: 40px auto;">
+    <h2 class="text-center">Login</h2>
+    <form method="post">
+        {% csrf_token %}
+        <label>Username</label>
+        {{ form.username }}
+
+        <label>Password</label>
+        {{ form.password }}
+
+        <button type="submit" class="btn btn-primary" style="width:100%">Login</button>
+    </form>
+    <p class="text-center" style="margin-top:20px;">
+        First time here? <br>
+        <a href="{% url 'register_user' %}" style="color:var(--primary)">Register as User</a> ot
+        <a href="{% url 'register_mechanic' %}" style="color:var(--secondary)">Register as Mechanic</a>
+    </p>
+</div>
+{% endblock %}

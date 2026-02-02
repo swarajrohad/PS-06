@@ -1,0 +1,20 @@
+{% extends 'dispatch/base.html' %}
+
+{% block content %}
+<div class="card">
+    <h2 class="text-center">Vehicle Owner Registration</h2>
+    <form method="post">
+        {% csrf_token %}
+        <!-- Manually rendering for better control or just loop -->
+        {% for field in form %}
+        <label>{{ field.label }}</label>
+        {{ field }}
+        {% if field.errors %}
+        <small style="color:var(--primary)">{{ field.errors.0 }}</small>
+        {% endif %}
+        {% endfor %}
+
+        <button type="submit" class="btn btn-primary" style="width:100%">Complete Registration</button>
+    </form>
+</div>
+{% endblock %}

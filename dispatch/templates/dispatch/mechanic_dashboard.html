@@ -1,0 +1,168 @@
+{% extends 'dispatch/base.html' %}
+
+{% block content %}
+<div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h2>Mechanic Dashboard</h2>
+        <div>
+            <span id="avail-badge" class="status-badge" style="cursor:pointer;" onclick="toggleAvailability()">
+                {% if user.mechanic_profile.is_available %}
+                Running
+                {% else %}
+                Offline
+                {% endif %}
+            </span>
+        </div>
+    </div>
+    <p>Location syncing active... <span id="loc-status" style="font-size:0.8rem; opacity:0.7;">Waiting</span></p>
+
+    <script>
+        // Update badge style on load
+        const badge = document.getElementById('avail-badge');
+        if (badge.innerText.trim() === 'Running') {
+            badge.style.background = '#2ecc71'; // Green
+        } else {
+            badge.style.background = '#e74c3c'; // Red
+        }
+
+        function toggleAvailability() {
+            fetch("{% url 'toggle_availability' %}", {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}'
+                }
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        if (data.is_available) {
+                            badge.innerText = 'Running';
+                            badge.style.background = '#2ecc71';
+                        } else {
+                            badge.innerText = 'Offline';
+                            badge.style.background = '#e74c3c';
+                        }
+                    }
+                });
+        }
+    </script>
+</div>
+
+<h3>Incoming / Active Requests</h3>
+
+{% if requests %}
+{% for req in requests %}
+<div class="req-item card">
+    <div style="display:flex; justify-content:space-between;">
+        <h3>{{ req.detected_category }} {% if req.is_emergency %}🚨{% endif %}</h3>
+        <span class="status-badge status-{{ req.status }}">{{ req.status }}</span>
+    </div>
+    <p><strong>Customer:</strong> {{ req.customer.full_name }} ({{ req.customer.vehicle_owner_profile.phone_number }})
+    </p>
+    <p><strong>Issue:</strong> {{ req.issue_description }}</p>
+    <p><strong>Vehicle:</strong> {{ req.customer.vehicle_owner_profile.vehicle_number }}</p>
+    <p><strong>Distance:</strong> <span class="dist-calc" data-lat="{{ req.location_latitude }}"
+            data-lon="{{ req.location_longitude }}">Calculating...</span></p>
+
+    <div style="margin-top:15px;">
+        <a href="https://www.google.com/maps/search/?api=1&query={{ req.location_latitude }},{{ req.location_longitude }}"
+            target="_blank" class="btn btn-secondary" style="background:#4285F4;">View on Google Maps 🗺️</a>
+
+        <!-- Embedded Map (Leaflet) -->
+        <div id="map-{{ req.id }}" style="height: 200px; margin-top: 10px; border-radius: 8px;"></div>
+        <script>
+            // Initialize map for this request
+            document.addEventListener("DOMContentLoaded", function () {
+                // Leaflet requires CSS/JS usually, but we can try simple iframe if CDN not loaded.
+                // Or better, just stick to the button if avoiding extra libs.
+                // BUT user asked to "Display location of user on google map".
+                // Let's use an iframe for Google Maps Embed API (Keyless mode)
+                // Note: Standard iframe requires key, but 'maps?q=' often works for simple display.
+
+                const mapDiv = document.getElementById("map-{{ req.id }}");
+                mapDiv.innerHTML = `<iframe 
+                    width="100%" 
+                    height="100%" 
+                    frameborder="0" 
+                    style="border:0" 
+                    src="https://maps.google.com/maps?q={{ req.location_latitude }},{{ req.location_longitude }}&z=15&output=embed">
+                </iframe>`;
+            });
+        </script>
+
+        {% if req.status == 'Assigned' %}
+        <a href="{% url 'mechanic_update_request' req.id 'accept' %}" class="btn btn-primary">Accept Job</a>
+        <a href="{% url 'mechanic_update_request' req.id 'reject' %}" class="btn btn-secondary"
+            style="background:gray;">Reject</a>
+        {% elif req.status == 'OnTheWay' %}
+        <a href="{% url 'mechanic_update_request' req.id 'complete' %}" class="btn btn-secondary">Mark Completed</a>
+        <a href="tel:{{ req.customer.vehicle_owner_profile.phone_number }}" class="btn"
+            style="border:1px solid white;">Call User</a>
+        {% endif %}
+    </div>
+</div>
+{% endfor %}
+{% else %}
+<div class="card text-center">
+    <p>No active requests. Good job! 🔧</p>
+    <p>Wait for new requests to be dispatched to you.</p>
+    <button onclick="window.location.reload()" class="btn btn-secondary">Refresh</button>
+</div>
+{% endif %}
+
+<script>
+    let myLat = 0.0;
+    let myLon = 0.0;
+
+    // Location Sync Loop
+    if (navigator.geolocation) {
+        navigator.geolocation.watchPosition(pos => {
+            myLat = pos.coords.latitude;
+            myLon = pos.coords.longitude;
+            document.getElementById('loc-status').innerText = `Synced: ${myLat.toFixed(4)}, ${myLon.toFixed(4)}`;
+
+            // Calculate distances for UI
+            document.querySelectorAll('.dist-calc').forEach(el => {
+                const targetLat = parseFloat(el.dataset.lat);
+                const targetLon = parseFloat(el.dataset.lon);
+                const dist = getDistanceFromLatLonInKm(myLat, myLon, targetLat, targetLon);
+                el.innerText = dist.toFixed(2) + " km";
+            });
+
+            // Sync to backend (throttled)
+            syncLocationQuery();
+
+        }, err => console.log(err));
+    }
+
+    function syncLocationQuery() {
+        // Send to server every 30s or so in real app, here we just do it once on load mostly or lazy
+        const formData = new FormData();
+        formData.append('latitude', myLat);
+        formData.append('longitude', myLon);
+        formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+        fetch("{% url 'update_location' %}", { method: 'POST', body: formData });
+    }
+
+    // Haversine via JS for UI display
+    function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
+        var R = 6371;
+        var dLat = deg2rad(lat2 - lat1);
+        var dLon = deg2rad(lon2 - lon1);
+        var a =
+            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        var d = R * c;
+        return d;
+    }
+    function deg2rad(deg) { return deg * (Math.PI / 180) }
+
+    // Auto-refresh dashboard every 10s to check for new assignments
+    setTimeout(() => {
+        window.location.reload();
+    }, 10000);
+</script>
+{% endblock %}

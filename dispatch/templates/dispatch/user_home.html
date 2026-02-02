@@ -1,0 +1,185 @@
+{% extends 'dispatch/base.html' %}
+
+{% block content %}
+<div class="card text-center">
+    <h2>How can we help you?</h2>
+
+    <!-- Emergency Button -->
+    <button id="btn-emergency" class="btn btn-emergency">
+        🚨 SOS / Emergency 🚨
+    </button>
+    <p style="margin-top:10px; opacity:0.7;">Press for immediate medical/accident assistance</p>
+</div>
+
+<div class="grid">
+    <!-- Voice Input -->
+    <div class="card text-center">
+        <h3>🎙️ Voice Request</h3>
+        <p>Tap and speak your issue</p>
+        <button id="btn-record" class="btn btn-secondary"
+            style="border-radius:50%; width:80px; height:80px; font-size:2rem;">
+            🎤
+        </button>
+        <p id="voice-status" style="margin-top:10px; color:var(--primary);"></p>
+    </div>
+
+    <!-- Text Input -->
+    <div class="card text-center">
+        <h3>📝 Text Request</h3>
+        <textarea id="issue-text" rows="3" placeholder="E.g., My car stopped working near the highway..."></textarea>
+        <button id="btn-send-text" class="btn btn-primary" style="width:100%">Send Request</button>
+    </div>
+</div>
+
+<!-- Request Status Overlay/Section -->
+<div id="status-section" class="card hidden">
+    <h3>Request Status</h3>
+    <div id="status-display">
+        <p><strong>Status:</strong> <span id="status-text" class="status-badge status-Open">Pending</span></p>
+        <p><strong>Category:</strong> <span id="detected-cat">...</span></p>
+        <p id="mechanic-info" class="hidden"><strong>Mechanic:</strong> <span id="mechanic-name">Finding...</span></p>
+    </div>
+</div>
+
+<script>
+    let lat = 0.0;
+    let lon = 0.0;
+    let currentRequestId = null;
+
+    // 1. Get Location immediately
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(pos => {
+            lat = pos.coords.latitude;
+            lon = pos.coords.longitude;
+            console.log("Location acquired:", lat, lon);
+        }, err => {
+            alert("Location is required for dispatch. Please enable it.");
+        });
+    }
+
+    function sendRequest(text, isEmergency = false) {
+        if (!lat) {
+            alert("Waiting for location...");
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('issue_description', text);
+        formData.append('latitude', lat);
+        formData.append('longitude', lon);
+        formData.append('is_emergency', isEmergency);
+        formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+        fetch("{% url 'create_request' %}", {
+            method: 'POST',
+            body: formData
+        })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    currentRequestId = data.request_id;
+                    showStatus();
+                    document.getElementById('issue-text').value = '';
+                    if (isEmergency) alert("EMERGENCY ALERT SENT! Help is on the way.");
+                }
+            });
+    }
+
+    // Emergency Button
+    document.getElementById('btn-emergency').addEventListener('click', () => {
+        if (confirm("Are you sure this is an emergency?")) {
+            sendRequest("EMERGENCY ALERT", true);
+        }
+    });
+
+    // Text Button
+    document.getElementById('btn-send-text').addEventListener('click', () => {
+        const text = document.getElementById('issue-text').value;
+        if (text) sendRequest(text);
+    });
+
+    // Voice Handling
+    // Voice Handling
+    const btnRecord = document.getElementById('btn-record');
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (SpeechRecognition) {
+        const recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.lang = 'en-US';
+
+        btnRecord.addEventListener('click', () => {
+            try {
+                recognition.start();
+                document.getElementById('voice-status').innerText = "Listening...";
+            } catch (e) {
+                console.error(e);
+                document.getElementById('voice-status').innerText = "Already listening...";
+            }
+        });
+
+        recognition.onresult = (event) => {
+            const transcript = event.results[0][0].transcript;
+            document.getElementById('voice-status').innerText = "";
+            document.getElementById('issue-text').value = transcript;
+
+            // Small delay to allow user to see text
+            setTimeout(() => {
+                if (confirm(`Send request: "${transcript}"?`)) {
+                    sendRequest(transcript);
+                }
+            }, 100);
+        };
+
+        recognition.onerror = (event) => {
+            console.error("Speech Recognition Error", event.error);
+            let msg = "Error. Try again.";
+            if (event.error === 'not-allowed') {
+                msg = "Permission denied. Allow microphone access.";
+            } else if (event.error === 'no-speech') {
+                msg = "No speech detected.";
+            } else if (event.error === 'network') {
+                msg = "Network error. Check connection.";
+            }
+            document.getElementById('voice-status').innerText = msg;
+        };
+
+        recognition.onend = () => {
+            // efficient reset if needed
+        };
+
+    } else {
+        btnRecord.disabled = true;
+        document.getElementById('voice-status').innerText = "Voice API not supported in this browser. Try Chrome/Edge/Safari.";
+    }
+
+    // Polling Status
+    function showStatus() {
+        document.getElementById('status-section').classList.remove('hidden');
+        pollStatus();
+    }
+
+    function pollStatus() {
+        if (!currentRequestId) return;
+
+        fetch(`/request/${currentRequestId}/status/`)
+            .then(res => res.json())
+            .then(data => {
+                const statusSpan = document.getElementById('status-text');
+                statusSpan.innerText = data.status;
+                statusSpan.className = `status-badge status-${data.status}`; // Reset class
+
+                document.getElementById('detected-cat').innerText = data.category;
+
+                if (data.mechanic) {
+                    document.getElementById('mechanic-info').classList.remove('hidden');
+                    document.getElementById('mechanic-name').innerText = data.mechanic;
+                }
+
+                if (data.status !== 'Completed' && data.status !== 'Cancelled') {
+                    setTimeout(pollStatus, 3000); // Poll every 3s
+                }
+            });
+    }
+</script>
+{% endblock %}
