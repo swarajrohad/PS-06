@@ -73,11 +73,7 @@
         <script>
             // Initialize map for this request
             document.addEventListener("DOMContentLoaded", function () {
-                // Leaflet requires CSS/JS usually, but we can try simple iframe if CDN not loaded.
-                // Or better, just stick to the button if avoiding extra libs.
-                // BUT user asked to "Display location of user on google map".
-                // Let's use an iframe for Google Maps Embed API (Keyless mode)
-                // Note: Standard iframe requires key, but 'maps?q=' often works for simple display.
+
 
                 const mapDiv = document.getElementById("map-{{ req.id }}");
                 mapDiv.innerHTML = `<iframe 
@@ -136,7 +132,6 @@
     }
 
     function syncLocationQuery() {
-        // Send to server every 30s or so in real app, here we just do it once on load mostly or lazy
         const formData = new FormData();
         formData.append('latitude', myLat);
         formData.append('longitude', myLon);
