@@ -33,7 +33,7 @@ class MechanicRegistrationForm(forms.ModelForm):
     full_name = forms.CharField(max_length=100)
     phone_number = forms.CharField(max_length=15)
     skill_type = forms.ChoiceField(choices=SKILL_CHOICES)
-    # Location will be captured via JS preferably, or manual input for now
+
     current_latitude = forms.FloatField(initial=0.0, widget=forms.HiddenInput, required=False)
     current_longitude = forms.FloatField(initial=0.0, widget=forms.HiddenInput, required=False)
 
@@ -57,7 +57,7 @@ class MechanicRegistrationForm(forms.ModelForm):
 
 class ServiceRequestForm(forms.Form):
     issue_description = forms.CharField(widget=forms.Textarea, required=False)
-    # Latitude/Longitude will be filled by JS
+
     location_latitude = forms.FloatField(widget=forms.HiddenInput)
     location_longitude = forms.FloatField(widget=forms.HiddenInput)
     is_emergency = forms.BooleanField(required=False, widget=forms.HiddenInput)
