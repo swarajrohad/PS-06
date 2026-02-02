@@ -58,7 +58,7 @@ def create_request(request):
 
         category, confidence = classify_issue(issue_text)
         if is_emergency:
-            category = 'Accident' # Force category if emergency button pressed
+            category = 'Accident' 
         
         # Create Request
         srv_req = ServiceRequest.objects.create(
@@ -75,17 +75,11 @@ def create_request(request):
         # Dispatch Logic
         mechanic = find_nearest_mechanic(lat, lon, category)
         if mechanic:
-            # We don't auto-assign in DB yet? Or we do?
-            # Prompt says "Send request to nearest... If rejected -> next".
-            # For MVP simplicity: We assign it but status is 'Assigned' and mechanic has to Accept.
-            # Or we leave mechanic null and let mechanic 'Pick' it?
-            # "When user request... 4. Send request to nearest mechanic"
-            # Let's assign it tentatively.
+
             srv_req.mechanic = mechanic.user
             srv_req.status = 'Assigned'
             srv_req.save()
             
-            # TODO: Notify mechanic (Simulated via dashboard refresh)
             
         return JsonResponse({'status': 'success', 'request_id': srv_req.id})
     return JsonResponse({'status': 'error'}, status=400)
@@ -102,9 +96,7 @@ def request_status(request, request_id):
 @login_required
 def mechanic_dashboard(request):
     requests = ServiceRequest.objects.filter(mechanic=request.user, status='Assigned')
-    # Also maybe show Open requests nearby if we want a "Marketplace" style?
-    # Requirement: "Incoming help requests nearby... Accept/Reject buttons"
-    # So we probably show assigned ones.
+
     return render(request, 'dispatch/mechanic_dashboard.html', {'requests': requests})
 
 @login_required
@@ -113,14 +105,12 @@ def mechanic_update_request(request, request_id, action):
     
     if action == 'accept':
         srv_req.status = 'OnTheWay'
-        # Lock mechanic? Implementation: MechanicProfile.is_available = False
         request.user.mechanic_profile.is_available = False
         request.user.mechanic_profile.save()
         
     elif action == 'reject':
         srv_req.mechanic = None # Unassign
         srv_req.status = 'Open' # Back to open pool
-        # Ideally trigger re-dispatch logic here
         
     elif action == 'complete':
         srv_req.status = 'Completed'
